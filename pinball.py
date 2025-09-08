@@ -122,17 +122,46 @@ def show_message(text):
 bricks = []
 
 def create_bricks(level=1):
+    """
+    สร้างบล็อกแบบสุ่มสนุกๆ ตาม level
+    - จำนวนแถวเพิ่มตาม level
+    - บล็อกบางตัวเป็นแข็ง (ต้องตี 2 ครั้ง)
+    - บล็อกสีพิเศษ spawn power-up แน่นอน
+    - Random layout มีช่องว่างและ zig-zag pattern
+    """
     global bricks
     bricks.clear()
+    
     colors = ["red", "orange", "yellow", "green", "blue", "purple"]
     y_start = 200
-    rows = 4 + level
+    rows = 4 + level  # แถวเพิ่มตาม level
+
     for row in range(rows):
-        for col in range(-7, 8):
+        # จำนวนคอลัมน์แบบสุ่ม (5-15)
+        cols = random.randint(5, 15)
+        start_col = -cols // 2
+
+        for col in range(start_col, start_col + cols):
+            # Zig-Zag หรือช่องว่าง 20%
+            if random.random() < 0.2 or (row + col) % 2 == 0:
+                continue
+
             brick = turtle.Turtle()
             brick.speed(0)
             brick.shape("square")
-            brick.color(colors[row % len(colors)])
+            
+            # กำหนด HP (1=ปกติ, 2=แข็ง)
+            brick.hp = 1
+            if random.random() < 0.2 and level >= 3:  # 20% chance เป็นแข็ง
+                brick.color("gray")
+                brick.hp = 2
+            # สีปกติ หรือ สีพิเศษ spawn power-up
+            elif random.random() < 0.1 and level >= 3:
+                brick.color("white")  # สีพิเศษ
+                brick.hp = 1
+            else:
+                brick.color(colors[row % len(colors)])
+
             brick.shapesize(stretch_wid=1, stretch_len=3)
             brick.penup()
             brick.goto(col * 65, y_start - row * 30)
@@ -273,8 +302,13 @@ def start_level():
     global running, waiting, ready_to_start, just_restarted
     if not ready_to_start:
         return
-    speed_x = min(ball_speed_base + (level - 1) * 0.3, max_ball_speed)
-    speed_y = min(ball_speed_base + (level - 1) * 0.2, max_ball_speed)
+    # # เพิื่มเติม level
+    # speed_x = min(ball_speed_base + (level - 1) * 0.3, max_ball_speed)
+    # speed_y = min(ball_speed_base + (level - 1) * 0.2, max_ball_speed)
+    # ไม่เพิ่มตาม level
+    speed_x = ball_speed_base
+    speed_y = ball_speed_base
+
     for b in balls:
         b.dx = random.choice([-speed_x, speed_x])
         b.dy = speed_y
@@ -431,30 +465,39 @@ while True:
             
             # คำนวณ offset จาก center ของ paddle
             offset = b.xcor() - paddle.xcor()
-            b.dx = (offset / paddle_half_width) * 8  # 8 คือความเร็วพื้นฐาน
+            b.dx = (offset / paddle_half_width) * ball_speed_base
             
             # เพิ่มแรงจากการเลื่อน paddle
             paddle_dx = paddle.xcor() - paddle_last_x
-            b.dx += paddle_dx * 0.2
-            
+            # b.dx += paddle_dx * 0.2
+        
             pygame.mixer.Sound.play(sound_bounce)
 
         # Brick collision
         for brick in bricks[:]:
             if (brick.ycor() + 15 > b.ycor() > brick.ycor() - 15 and
                 brick.xcor() + 45 > b.xcor() > brick.xcor() - 45):
-                bricks.remove(brick)
-                brick.hideturtle()
-                pygame.mixer.Sound.play(sound_brick)
-                if random.random() < 0.2:
-                    spawn_powerup(brick.xcor(), brick.ycor())
+                
+                brick.hp -= 1
+                if brick.hp <= 0:
+                    bricks.remove(brick)
+                    brick.hideturtle()
+                    add_score(10)
+                    # ถ้าเป็นสีพิเศษ spawn power-up แน่นอน
+                    if brick.color()[0] == "white":
+                        spawn_powerup(brick.xcor(), brick.ycor())
+                else:
+                    brick.color("darkgray")  # เปลี่ยนสีบอกว่าโดนตีแล้ว
+
+                # Ball ตีกลับ
                 if abs(b.ycor() - brick.ycor()) > 10:
                     b.dy *= -1
                 else:
                     b.dx *= -1
-                b.dx += random.uniform(-0.03, 0.03)
-                add_score(10)
+                # b.dx += random.uniform(-0.03, 0.03)
+                pygame.mixer.Sound.play(sound_brick)
                 break
+
 
     # Power-up movement & effect
     for pu in powerups[:]:
