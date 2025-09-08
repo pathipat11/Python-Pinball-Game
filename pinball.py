@@ -39,7 +39,7 @@ paddle_speed = 15
 # -------------------------
 balls = []
 ball_speed_base = 2
-max_ball_speed = 5  # สูงสุดของ dx, dy
+max_ball_speed = 5
 
 def create_ball():
     b = turtle.Turtle()
@@ -459,45 +459,45 @@ while True:
         if (paddle.ycor() + paddle_half_height > b.ycor() > paddle.ycor() - paddle_half_height and
             paddle.xcor() + paddle_half_width > b.xcor() > paddle.xcor() - paddle_half_width and b.dy < 0):
             
-            # ตั้งตำแหน่งลูกบอลให้อยู่เหนือ paddle
             b.sety(paddle.ycor() + paddle_half_height)
             b.dy *= -1
-            
-            # คำนวณ offset จาก center ของ paddle
             offset = b.xcor() - paddle.xcor()
             b.dx = (offset / paddle_half_width) * ball_speed_base
-            
-            # เพิ่มแรงจากการเลื่อน paddle
             paddle_dx = paddle.xcor() - paddle_last_x
-            # b.dx += paddle_dx * 0.2
-        
+            b.dx += paddle_dx * 0.2
             pygame.mixer.Sound.play(sound_bounce)
 
-        # Brick collision
+        # Brick collision (full version)
         for brick in bricks[:]:
             if (brick.ycor() + 15 > b.ycor() > brick.ycor() - 15 and
                 brick.xcor() + 45 > b.xcor() > brick.xcor() - 45):
-                
+
+                # ลด HP ของบล็อก
                 brick.hp -= 1
+                brick_destroyed = False
+
                 if brick.hp <= 0:
                     bricks.remove(brick)
                     brick.hideturtle()
                     add_score(10)
-                    # ถ้าเป็นสีพิเศษ spawn power-up แน่นอน
-                    if brick.color()[0] == "white":
-                        spawn_powerup(brick.xcor(), brick.ycor())
+                    brick_destroyed = True
                 else:
-                    brick.color("darkgray")  # เปลี่ยนสีบอกว่าโดนตีแล้ว
+                    # เปลี่ยนสีบอกว่าโดนตีแล้ว
+                    brick.color("darkgray")
+
+                # โอกาส drop power-up (20% หรือ เพิ่มตาม level)
+                drop_chance = 0.2 + (level * 0.02)
+                if brick_destroyed and random.random() < drop_chance:
+                    spawn_powerup(brick.xcor(), brick.ycor())
 
                 # Ball ตีกลับ
                 if abs(b.ycor() - brick.ycor()) > 10:
                     b.dy *= -1
                 else:
                     b.dx *= -1
-                # b.dx += random.uniform(-0.03, 0.03)
+
                 pygame.mixer.Sound.play(sound_brick)
                 break
-
 
     # Power-up movement & effect
     for pu in powerups[:]:
@@ -506,9 +506,6 @@ while True:
             pu.hideturtle()
             powerups.remove(pu)
             continue
-
-        paddle_half_width = 20 * paddle.shapesize()[1]
-        paddle_half_height = 20 * paddle.shapesize()[0]
 
         if (paddle.ycor() + paddle_half_height > pu.ycor() > paddle.ycor() - paddle_half_height and
             paddle.xcor() + paddle_half_width > pu.xcor() > paddle.xcor() - paddle_half_width):
