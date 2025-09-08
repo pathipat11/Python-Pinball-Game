@@ -141,6 +141,7 @@ def apply_powerup(pu):
     elif pu.type == "life":
         heart += 1
         pygame.mixer.Sound.play(sound_powerup)
+        update_score()
     elif pu.type == "slow":
         for b in balls:
             b.dx *= 0.7
@@ -155,6 +156,52 @@ def apply_powerup(pu):
 def reset_paddle():
     paddle.shapesize(stretch_wid=1, stretch_len=8)
     active_effects["paddle"] = False
+
+# -------------------------
+# Power-up Visual
+# -------------------------
+powerup_msg = turtle.Turtle()
+powerup_msg.hideturtle()
+powerup_msg.speed(0)
+powerup_msg.color("white")
+powerup_msg.penup()
+powerup_msg.goto(0, -280)  # แสดงด้านล่างจอ
+
+def show_powerup_message(text, color="white"):
+    powerup_msg.clear()
+    powerup_msg.color(color)
+    powerup_msg.write(text, align="center", font=("Courier", 18, "bold"))
+    screen.ontimer(powerup_msg.clear, 2000)  # ลบข้อความหลัง 2 วิ
+
+# -------------------------
+# ปรับ apply_powerup
+# -------------------------
+def apply_powerup(pu):
+    global heart, balls
+    if pu.type == "paddle":
+        if not active_effects["paddle"]:
+            active_effects["paddle"] = True
+            paddle.shapesize(stretch_wid=1, stretch_len=12)
+            pygame.mixer.Sound.play(sound_powerup)
+            show_powerup_message("Paddle +", "green")
+            screen.ontimer(reset_paddle, 10000)
+    elif pu.type == "life":
+        heart += 1
+        pygame.mixer.Sound.play(sound_powerup)
+        update_score()
+        show_powerup_message("Life +", "pink")
+    elif pu.type == "slow":
+        for b in balls:
+            b.dx *= 0.7
+            b.dy *= 0.7
+        pygame.mixer.Sound.play(sound_powerup)
+        show_powerup_message("Slow", "blue")
+    elif pu.type == "extra_ball":
+        new_ball = create_ball()
+        new_ball.dx = random.choice([-ball_speed_base, ball_speed_base])
+        new_ball.dy = ball_speed_base
+        pygame.mixer.Sound.play(sound_powerup)
+        show_powerup_message("Ball +", "red")
 
 # -------------------------
 # Game state
@@ -187,7 +234,7 @@ screen.onkeyrelease(key_release_right, "Right")
 screen.onkeypress(key_press_left, "Left")
 screen.onkeyrelease(key_release_left, "Left")
 
-def move_paddle():
+def move_paddle_smooth():
     if keys["Right"]:
         x = paddle.xcor() + paddle_speed
         if x > 430: x = 430
@@ -196,6 +243,10 @@ def move_paddle():
         x = paddle.xcor() - paddle_speed
         if x < -430: x = -430
         paddle.setx(x)
+    screen.ontimer(move_paddle_smooth, 20)  # เรียกทุก 20 ms
+
+# เริ่มเรียกฟังก์ชันนี้
+move_paddle_smooth()
 
 # -------------------------
 # Ball & Level functions
@@ -287,10 +338,8 @@ def lose_life():
     pygame.mixer.Sound.play(sound_life)
     if heart > 0:
         reset_ball_positions()
-        return True  # ยังมีชีวิต
-    return False  # หมดชีวิต
-
-
+        return True
+    return False
 
 # -------------------------
 # Keyboard bindings
@@ -313,11 +362,8 @@ show_message("Press SPACE to Start")
 # -------------------------
 while True:
     screen.update()
-    move_paddle()  # Smooth paddle movement
 
-    if paused:
-        continue
-    if not running:
+    if paused or not running:
         continue
 
     for b in balls[:]:
@@ -351,7 +397,6 @@ while True:
                     waiting = True
                     show_message("Press SPACE to Launch")
 
-
         # Paddle collision
         if (paddle.ycor() + 20 > b.ycor() > paddle.ycor() - 20 and
             paddle.xcor() + 80 > b.xcor() > paddle.xcor() - 80 and b.dy < 0):
@@ -359,8 +404,8 @@ while True:
             b.dy *= -1
             b.dx += random.uniform(-0.05, 0.05)
             pygame.mixer.Sound.play(sound_bounce)
-            if abs(b.dx) < 5: b.dx *= 1.03
-            if abs(b.dy) < 5: b.dy *= 1.03
+            # if abs(b.dx) < 5: b.dx *= 1.03
+            # if abs(b.dy) < 5: b.dy *= 1.03
 
         # Brick collision
         for brick in bricks[:]:
