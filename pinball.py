@@ -39,6 +39,7 @@ paddle_speed = 15
 # -------------------------
 balls = []
 ball_speed_base = 2
+max_ball_speed = 5  # สูงสุดของ dx, dy
 
 def create_ball():
     b = turtle.Turtle()
@@ -53,10 +54,26 @@ def create_ball():
     return b
 
 create_ball()
+# -------------------------
+# High Score & Scoreboard
+# -------------------------
+HIGH_SCORE_FILE = "highscore.txt"
 
-# -------------------------
-# Scoreboard
-# -------------------------
+def load_highscore():
+    try:
+        with open(HIGH_SCORE_FILE, "r") as f:
+            return int(f.read().strip())
+    except:
+        return 0
+
+def save_highscore(score):
+    try:
+        with open(HIGH_SCORE_FILE, "w") as f:
+            f.write(str(score))
+    except:
+        pass
+
+highscore = load_highscore()
 score = 0
 heart = 3
 level = 1
@@ -69,12 +86,17 @@ scoreBoard.color("white")
 scoreBoard.goto(0, 260)
 
 def update_score():
+    """อัปเดตคะแนนและแสดงบนหน้าจอ"""
     scoreBoard.clear()
-    scoreBoard.write(f"Score: {score}  Heart: {heart}  Level: {level}", align="center", font=("Courier", 20, "bold"))
+    scoreBoard.write(f"Score: {score}  Heart: {heart}  Level: {level}  High: {highscore}",  align="center", font=("Courier", 20, "bold"))
 
 def add_score(points):
-    global score
+    """เพิ่มคะแนนและบันทึก High Score ถ้าได้คะแนนสูงสุดใหม่"""
+    global score, highscore
     score += points
+    if score > highscore:
+        highscore = score
+        save_highscore(highscore)
     update_score()
 
 # -------------------------
@@ -89,7 +111,10 @@ msg_turtle.goto(0, 0)
 
 def show_message(text):
     msg_turtle.clear()
+    msg_turtle.goto(0, 20)
     msg_turtle.write(text, align="center", font=("Courier", 24, "bold"))
+    msg_turtle.goto(0, 0)
+
 
 # -------------------------
 # Bricks
@@ -130,29 +155,6 @@ def spawn_powerup(x, y):
     t.type = random.choice(["paddle", "life", "slow", "extra_ball"])
     powerups.append(t)
 
-def apply_powerup(pu):
-    global heart, balls
-    if pu.type == "paddle":
-        if not active_effects["paddle"]:
-            active_effects["paddle"] = True
-            paddle.shapesize(stretch_wid=1, stretch_len=12)
-            pygame.mixer.Sound.play(sound_powerup)
-            screen.ontimer(reset_paddle, 10000)
-    elif pu.type == "life":
-        heart += 1
-        pygame.mixer.Sound.play(sound_powerup)
-        update_score()
-    elif pu.type == "slow":
-        for b in balls:
-            b.dx *= 0.7
-            b.dy *= 0.7
-        pygame.mixer.Sound.play(sound_powerup)
-    elif pu.type == "extra_ball":
-        new_ball = create_ball()
-        new_ball.dx = random.choice([-ball_speed_base, ball_speed_base])
-        new_ball.dy = ball_speed_base
-        pygame.mixer.Sound.play(sound_powerup)
-
 def reset_paddle():
     paddle.shapesize(stretch_wid=1, stretch_len=8)
     active_effects["paddle"] = False
@@ -165,16 +167,16 @@ powerup_msg.hideturtle()
 powerup_msg.speed(0)
 powerup_msg.color("white")
 powerup_msg.penup()
-powerup_msg.goto(0, -280)  # แสดงด้านล่างจอ
+powerup_msg.goto(0, -280)
 
 def show_powerup_message(text, color="white"):
     powerup_msg.clear()
     powerup_msg.color(color)
     powerup_msg.write(text, align="center", font=("Courier", 18, "bold"))
-    screen.ontimer(powerup_msg.clear, 2000)  # ลบข้อความหลัง 2 วิ
+    screen.ontimer(powerup_msg.clear, 2000)
 
 # -------------------------
-# ปรับ apply_powerup
+# Apply Power-up
 # -------------------------
 def apply_powerup(pu):
     global heart, balls
@@ -192,10 +194,16 @@ def apply_powerup(pu):
         show_powerup_message("Life +", "pink")
     elif pu.type == "slow":
         for b in balls:
-            b.dx *= 0.7
-            b.dy *= 0.7
+            b.dx *= 0.5
+            b.dy *= 0.5
         pygame.mixer.Sound.play(sound_powerup)
         show_powerup_message("Slow", "blue")
+        # คืนความเร็วหลัง 5 วิ
+        def restore_speed():
+            for b in balls:
+                if b.dx != 0: b.dx *= 2
+                if b.dy != 0: b.dy *= 2
+        screen.ontimer(restore_speed, 5000)
     elif pu.type == "extra_ball":
         new_ball = create_ball()
         new_ball.dx = random.choice([-ball_speed_base, ball_speed_base])
@@ -213,7 +221,7 @@ just_restarted = False
 ready_to_start = False
 
 # -------------------------
-# Paddle hold key movement
+# Paddle smooth movement
 # -------------------------
 keys = {"Left": False, "Right": False}
 
@@ -234,7 +242,10 @@ screen.onkeyrelease(key_release_right, "Right")
 screen.onkeypress(key_press_left, "Left")
 screen.onkeyrelease(key_release_left, "Left")
 
+paddle_last_x = paddle.xcor()
+
 def move_paddle_smooth():
+    global paddle_last_x
     if keys["Right"]:
         x = paddle.xcor() + paddle_speed
         if x > 430: x = 430
@@ -243,10 +254,11 @@ def move_paddle_smooth():
         x = paddle.xcor() - paddle_speed
         if x < -430: x = -430
         paddle.setx(x)
-    screen.ontimer(move_paddle_smooth, 20)  # เรียกทุก 20 ms
+    paddle_last_x = paddle.xcor()
+    screen.ontimer(move_paddle_smooth, 20)
 
-# เริ่มเรียกฟังก์ชันนี้
 move_paddle_smooth()
+
 
 # -------------------------
 # Ball & Level functions
@@ -261,10 +273,16 @@ def start_level():
     global running, waiting, ready_to_start, just_restarted
     if not ready_to_start:
         return
-    speed = ball_speed_base + (level - 1) * 0.5
+    speed_x = min(ball_speed_base + (level - 1) * 0.3, max_ball_speed)
+    speed_y = min(ball_speed_base + (level - 1) * 0.2, max_ball_speed)
     for b in balls:
-        b.dx = random.choice([-speed, speed])
-        b.dy = speed
+        b.dx = random.choice([-speed_x, speed_x])
+        b.dy = speed_y
+    # Auto paddle boost every level >=5
+    if level >= 5 and not active_effects["paddle"]:
+        active_effects["paddle"] = True
+        paddle.shapesize(stretch_wid=1, stretch_len=12)
+        screen.ontimer(reset_paddle, 10000)
     running = True
     waiting = False
     ready_to_start = False
@@ -297,7 +315,10 @@ def game_over():
     for brick in bricks: brick.hideturtle()
     bricks.clear()
     pygame.mixer.Sound.play(sound_gameover)
-    show_message(f"GAME OVER!\nFinal Score: {score}\nPress R to Restart")
+    msg_turtle.clear()
+    msg_turtle.goto(0, 20)
+    msg_turtle.write(f"💀 GAME OVER 💀\nScore: {score}\nHigh Score: {highscore}\nLevel Reached: {level}\nPress 'R' to Restart", align="center", font=("Courier", 24, "bold"))
+    msg_turtle.goto(0, 0)
 
 def restart():
     global score, heart, level, running, waiting, balls, powerups, active_effects, bricks, just_restarted, ready_to_start
@@ -398,14 +419,25 @@ while True:
                     show_message("Press SPACE to Launch")
 
         # Paddle collision
-        if (paddle.ycor() + 20 > b.ycor() > paddle.ycor() - 20 and
-            paddle.xcor() + 80 > b.xcor() > paddle.xcor() - 80 and b.dy < 0):
-            b.sety(paddle.ycor() + 20)
+        paddle_half_width = 20 * paddle.shapesize()[1]
+        paddle_half_height = 20 * paddle.shapesize()[0]
+
+        if (paddle.ycor() + paddle_half_height > b.ycor() > paddle.ycor() - paddle_half_height and
+            paddle.xcor() + paddle_half_width > b.xcor() > paddle.xcor() - paddle_half_width and b.dy < 0):
+            
+            # ตั้งตำแหน่งลูกบอลให้อยู่เหนือ paddle
+            b.sety(paddle.ycor() + paddle_half_height)
             b.dy *= -1
-            b.dx += random.uniform(-0.05, 0.05)
+            
+            # คำนวณ offset จาก center ของ paddle
+            offset = b.xcor() - paddle.xcor()
+            b.dx = (offset / paddle_half_width) * 8  # 8 คือความเร็วพื้นฐาน
+            
+            # เพิ่มแรงจากการเลื่อน paddle
+            paddle_dx = paddle.xcor() - paddle_last_x
+            b.dx += paddle_dx * 0.2
+            
             pygame.mixer.Sound.play(sound_bounce)
-            # if abs(b.dx) < 5: b.dx *= 1.03
-            # if abs(b.dy) < 5: b.dy *= 1.03
 
         # Brick collision
         for brick in bricks[:]:
@@ -430,8 +462,13 @@ while True:
         if pu.ycor() < -280:
             pu.hideturtle()
             powerups.remove(pu)
-        if (paddle.ycor() + 20 > pu.ycor() > paddle.ycor() - 20 and
-            paddle.xcor() + 80 > pu.xcor() > paddle.xcor() - 80):
+            continue
+
+        paddle_half_width = 20 * paddle.shapesize()[1]
+        paddle_half_height = 20 * paddle.shapesize()[0]
+
+        if (paddle.ycor() + paddle_half_height > pu.ycor() > paddle.ycor() - paddle_half_height and
+            paddle.xcor() + paddle_half_width > pu.xcor() > paddle.xcor() - paddle_half_width):
             apply_powerup(pu)
             pu.hideturtle()
             powerups.remove(pu)
