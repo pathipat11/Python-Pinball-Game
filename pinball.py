@@ -1,5 +1,17 @@
 import turtle
 import random
+import pygame
+
+# -------------------------
+# Initialize pygame for sound
+# -------------------------
+pygame.mixer.init()
+sound_bounce = pygame.mixer.Sound("assets/sounds/bounce.mp3")
+sound_brick = pygame.mixer.Sound("assets/sounds/brick.mp3")
+sound_powerup = pygame.mixer.Sound("assets/sounds/powerup.mp3")
+sound_life = pygame.mixer.Sound("assets/sounds/life.mp3")
+sound_levelup = pygame.mixer.Sound("assets/sounds/levelup.mp3")
+sound_gameover = pygame.mixer.Sound("assets/sounds/gameover.mp3")
 
 # -------------------------
 # Setup screen
@@ -20,6 +32,7 @@ paddle.color("cyan")
 paddle.shapesize(stretch_wid=1, stretch_len=8)
 paddle.penup()
 paddle.goto(0, -250)
+paddle_speed = 15
 
 # -------------------------
 # Balls
@@ -39,7 +52,7 @@ def create_ball():
     balls.append(b)
     return b
 
-ball = create_ball()
+create_ball()
 
 # -------------------------
 # Scoreboard
@@ -57,7 +70,12 @@ scoreBoard.goto(0, 260)
 
 def update_score():
     scoreBoard.clear()
-    scoreBoard.write(f"Score: {score}  heart: {heart}  Level: {level}", align="center", font=("Courier", 20, "bold"))
+    scoreBoard.write(f"Score: {score}  Heart: {heart}  Level: {level}", align="center", font=("Courier", 20, "bold"))
+
+def add_score(points):
+    global score
+    score += points
+    update_score()
 
 # -------------------------
 # Message
@@ -118,17 +136,21 @@ def apply_powerup(pu):
         if not active_effects["paddle"]:
             active_effects["paddle"] = True
             paddle.shapesize(stretch_wid=1, stretch_len=12)
-            screen.ontimer(lambda: reset_paddle(), 10000)
+            pygame.mixer.Sound.play(sound_powerup)
+            screen.ontimer(reset_paddle, 10000)
     elif pu.type == "life":
         heart += 1
+        pygame.mixer.Sound.play(sound_powerup)
     elif pu.type == "slow":
         for b in balls:
             b.dx *= 0.7
             b.dy *= 0.7
+        pygame.mixer.Sound.play(sound_powerup)
     elif pu.type == "extra_ball":
         new_ball = create_ball()
         new_ball.dx = random.choice([-ball_speed_base, ball_speed_base])
         new_ball.dy = ball_speed_base
+        pygame.mixer.Sound.play(sound_powerup)
 
 def reset_paddle():
     paddle.shapesize(stretch_wid=1, stretch_len=8)
@@ -139,23 +161,41 @@ def reset_paddle():
 # -------------------------
 running = False
 waiting = True
-just_restarted = False  # ป้องกัน Win Condition ทำงานทันทีหลัง restart
+paused = False
+just_restarted = False
 ready_to_start = False
 
 # -------------------------
-# Paddle movement
+# Paddle hold key movement
 # -------------------------
-def movePadRight():
-    x = paddle.xcor() + 40
-    if x > 430:
-        x = 430
-    paddle.setx(x)
+keys = {"Left": False, "Right": False}
 
-def movePadLeft():
-    x = paddle.xcor() - 40
-    if x < -430:
-        x = -430
-    paddle.setx(x)
+def key_press_right():
+    keys["Right"] = True
+
+def key_release_right():
+    keys["Right"] = False
+
+def key_press_left():
+    keys["Left"] = True
+
+def key_release_left():
+    keys["Left"] = False
+
+screen.onkeypress(key_press_right, "Right")
+screen.onkeyrelease(key_release_right, "Right")
+screen.onkeypress(key_press_left, "Left")
+screen.onkeyrelease(key_release_left, "Left")
+
+def move_paddle():
+    if keys["Right"]:
+        x = paddle.xcor() + paddle_speed
+        if x > 430: x = 430
+        paddle.setx(x)
+    if keys["Left"]:
+        x = paddle.xcor() - paddle_speed
+        if x < -430: x = -430
+        paddle.setx(x)
 
 # -------------------------
 # Ball & Level functions
@@ -177,7 +217,7 @@ def start_level():
     running = True
     waiting = False
     ready_to_start = False
-    just_restarted = False  # ปิด flag หลังเริ่มเล่น
+    just_restarted = False
     show_message("")
 
 def launch_ball():
@@ -194,19 +234,18 @@ def level_up():
     running = False
     waiting = True
     ready_to_start = False
+    pygame.mixer.Sound.play(sound_levelup)
     show_message("Press SPACE to Start")
 
 def game_over():
     global running, waiting
     running = False
     waiting = True
-    for b in balls:
-        b.hideturtle()
-    for pu in powerups:
-        pu.hideturtle()
-    for brick in bricks:
-        brick.hideturtle()
+    for b in balls: b.hideturtle()
+    for pu in powerups: pu.hideturtle()
+    for brick in bricks: brick.hideturtle()
     bricks.clear()
+    pygame.mixer.Sound.play(sound_gameover)
     show_message(f"GAME OVER!\nFinal Score: {score}\nPress R to Restart")
 
 def restart():
@@ -218,14 +257,11 @@ def restart():
     just_restarted = True
     ready_to_start = False
 
-    for b in balls:
-        b.hideturtle()
+    for b in balls: b.hideturtle()
     balls.clear()
-    for pu in powerups:
-        pu.hideturtle()
+    for pu in powerups: pu.hideturtle()
     powerups.clear()
-    for brick in bricks:
-        brick.hideturtle()
+    for brick in bricks: brick.hideturtle()
     bricks.clear()
 
     create_ball()
@@ -236,14 +272,33 @@ def restart():
     running = False
     waiting = True
 
+def toggle_pause():
+    global paused
+    paused = not paused
+    if paused:
+        show_message("Paused\nPress P to Resume")
+    else:
+        show_message("")
+
+def lose_life():
+    global heart
+    heart -= 1
+    update_score()
+    pygame.mixer.Sound.play(sound_life)
+    if heart > 0:
+        reset_ball_positions()
+        return True  # ยังมีชีวิต
+    return False  # หมดชีวิต
+
+
+
 # -------------------------
 # Keyboard bindings
 # -------------------------
 screen.listen()
-screen.onkeypress(movePadRight, "Right")
-screen.onkeypress(movePadLeft, "Left")
 screen.onkeypress(launch_ball, "space")
 screen.onkeypress(restart, "r")
+screen.onkeypress(toggle_pause, "p")
 
 # -------------------------
 # Main setup
@@ -258,11 +313,13 @@ show_message("Press SPACE to Start")
 # -------------------------
 while True:
     screen.update()
+    move_paddle()  # Smooth paddle movement
 
+    if paused:
+        continue
     if not running:
         continue
 
-    # Move balls
     for b in balls[:]:
         b.setx(b.xcor() + b.dx)
         b.sety(b.ycor() + b.dy)
@@ -271,28 +328,29 @@ while True:
         if b.xcor() > 480:
             b.setx(480)
             b.dx *= -1
+            pygame.mixer.Sound.play(sound_bounce)
         if b.xcor() < -480:
             b.setx(-480)
             b.dx *= -1
+            pygame.mixer.Sound.play(sound_bounce)
 
         # Wall collision Y
         if b.ycor() > 280:
             b.sety(280)
             b.dy *= -1
+            pygame.mixer.Sound.play(sound_bounce)
 
         # Bottom collision
         if b.ycor() < -280:
             balls.remove(b)
             b.hideturtle()
             if not balls:
-                heart -= 1
-                update_score()
-                if heart > 0:
-                    reset_ball_positions()
+                if not lose_life():
+                    game_over()
+                else:
                     waiting = True
                     show_message("Press SPACE to Launch")
-                else:
-                    game_over()
+
 
         # Paddle collision
         if (paddle.ycor() + 20 > b.ycor() > paddle.ycor() - 20 and
@@ -300,10 +358,9 @@ while True:
             b.sety(paddle.ycor() + 20)
             b.dy *= -1
             b.dx += random.uniform(-0.05, 0.05)
-            if abs(b.dx) < 5:
-                b.dx *= 1.03
-            if abs(b.dy) < 5:
-                b.dy *= 1.03
+            pygame.mixer.Sound.play(sound_bounce)
+            if abs(b.dx) < 5: b.dx *= 1.03
+            if abs(b.dy) < 5: b.dy *= 1.03
 
         # Brick collision
         for brick in bricks[:]:
@@ -311,6 +368,7 @@ while True:
                 brick.xcor() + 45 > b.xcor() > brick.xcor() - 45):
                 bricks.remove(brick)
                 brick.hideturtle()
+                pygame.mixer.Sound.play(sound_brick)
                 if random.random() < 0.2:
                     spawn_powerup(brick.xcor(), brick.ycor())
                 if abs(b.ycor() - brick.ycor()) > 10:
@@ -318,8 +376,7 @@ while True:
                 else:
                     b.dx *= -1
                 b.dx += random.uniform(-0.03, 0.03)
-                score += 10
-                update_score()
+                add_score(10)
                 break
 
     # Power-up movement & effect
