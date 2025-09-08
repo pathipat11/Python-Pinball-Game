@@ -1,7 +1,5 @@
-# breakout_powerup_time.py
 import turtle
 import random
-import time
 
 # -------------------------
 # Setup screen
@@ -27,6 +25,7 @@ paddle.goto(0, -250)
 # Balls
 # -------------------------
 balls = []
+ball_speed_base = 2
 
 def create_ball():
     b = turtle.Turtle()
@@ -40,7 +39,6 @@ def create_ball():
     balls.append(b)
     return b
 
-ball_speed_base = 2
 ball = create_ball()
 
 # -------------------------
@@ -57,15 +55,23 @@ scoreBoard.hideturtle()
 scoreBoard.color("white")
 scoreBoard.goto(0, 260)
 
+def update_score():
+    scoreBoard.clear()
+    scoreBoard.write(f"Score: {score}  heart: {heart}  Level: {level}", align="center", font=("Courier", 20, "bold"))
+
 # -------------------------
 # Message
 # -------------------------
-message = turtle.Turtle()
-message.speed(0)
-message.penup()
-message.hideturtle()
-message.color("yellow")
-message.goto(0, 0)
+msg_turtle = turtle.Turtle()
+msg_turtle.hideturtle()
+msg_turtle.speed(0)
+msg_turtle.color("yellow")
+msg_turtle.penup()
+msg_turtle.goto(0, 0)
+
+def show_message(text):
+    msg_turtle.clear()
+    msg_turtle.write(text, align="center", font=("Courier", 24, "bold"))
 
 # -------------------------
 # Bricks
@@ -93,7 +99,7 @@ def create_bricks(level=1):
 # Power-ups
 # -------------------------
 powerups = []
-active_effects = {"paddle": False}  # track timed effects
+active_effects = {"paddle": False}
 
 def spawn_powerup(x, y):
     t = turtle.Turtle()
@@ -112,7 +118,6 @@ def apply_powerup(pu):
         if not active_effects["paddle"]:
             active_effects["paddle"] = True
             paddle.shapesize(stretch_wid=1, stretch_len=12)
-            # กำหนดเวลา 10 วินาที แล้วลดขนาด paddle
             screen.ontimer(lambda: reset_paddle(), 10000)
     elif pu.type == "life":
         heart += 1
@@ -134,18 +139,12 @@ def reset_paddle():
 # -------------------------
 running = False
 waiting = True
+just_restarted = False  # ป้องกัน Win Condition ทำงานทันทีหลัง restart
+ready_to_start = False
 
 # -------------------------
-# Functions
+# Paddle movement
 # -------------------------
-def update_score():
-    scoreBoard.clear()
-    scoreBoard.write(f"Score: {score}  heart: {heart}  Level: {level}", align="center", font=("Courier", 20, "bold"))
-
-def show_message(text):
-    message.clear()
-    message.write(text, align="center", font=("Courier", 24, "bold"))
-
 def movePadRight():
     x = paddle.xcor() + 40
     if x > 430:
@@ -158,6 +157,9 @@ def movePadLeft():
         x = -430
     paddle.setx(x)
 
+# -------------------------
+# Ball & Level functions
+# -------------------------
 def reset_ball_positions():
     for b in balls:
         b.goto(0, -220)
@@ -165,82 +167,74 @@ def reset_ball_positions():
         b.dy = 0
 
 def start_level():
-    global running, waiting
+    global running, waiting, ready_to_start, just_restarted
+    if not ready_to_start:
+        return
     speed = ball_speed_base + (level - 1) * 0.5
     for b in balls:
         b.dx = random.choice([-speed, speed])
         b.dy = speed
-    waiting = False
     running = True
+    waiting = False
+    ready_to_start = False
+    just_restarted = False  # ปิด flag หลังเริ่มเล่น
     show_message("")
 
 def launch_ball():
-    global waiting
+    global waiting, ready_to_start
     if waiting and heart > 0:
         if not balls:
             create_ball()
-        start_level()
+        show_message(f"Level {level}!\nGet Ready...")
+        ready_to_start = True
+        screen.ontimer(start_level, 1000)
 
-def show_big_message(text):
-    # สร้าง Turtle ใหม่สำหรับข้อความนี้
-    msg = turtle.Turtle()
-    msg.hideturtle()
-    msg.speed(0)
-    msg.color("yellow")
-    msg.penup()
-    msg.goto(0, 0)
-    msg.write(text, align="center", font=("Courier", 24, "bold"))
-    return msg
+def level_up():
+    global running, waiting, ready_to_start
+    running = False
+    waiting = True
+    ready_to_start = False
+    show_message("Press SPACE to Start")
 
 def game_over():
     global running, waiting
     running = False
     waiting = True
-
-    # ซ่อนลูกบอลและ power-up
     for b in balls:
         b.hideturtle()
     for pu in powerups:
         pu.hideturtle()
+    for brick in bricks:
+        brick.hideturtle()
+    bricks.clear()
+    show_message(f"GAME OVER!\nFinal Score: {score}\nPress R to Restart")
 
-    # แสดงข้อความ GAME OVER อยู่ด้านบน
-    show_big_message(f"GAME OVER!\nFinal Score: {score}\nPress R to Restart")
-
-def level_up():
-    global running, waiting, level
-    running = False
-    waiting = True
-    # แสดงข้อความ Level Up อยู่ด้านบน
-    show_big_message(f"Level {level}!\nPress SPACE to Start")
-    
 def restart():
-    global score, heart, level, running, waiting, balls, powerups, active_effects, bricks
+    global score, heart, level, running, waiting, balls, powerups, active_effects, bricks, just_restarted, ready_to_start
     score = 0
     heart = 3
     level = 1
     active_effects = {"paddle": False}
+    just_restarted = True
+    ready_to_start = False
 
-    # ซ่อนลูกบอลเก่า
     for b in balls:
         b.hideturtle()
     balls.clear()
-
-    # ซ่อน power-up เก่า
     for pu in powerups:
         pu.hideturtle()
     powerups.clear()
+    for brick in bricks:
+        brick.hideturtle()
+    bricks.clear()
 
-    # รีเซ็ตลูกบอลใหม่
     create_ball()
     reset_ball_positions()
-
-    # รีเซ็ต scoreboard
+    create_bricks(level)
     update_score()
-
-    # แสดงข้อความเริ่มต้น
+    show_message("Press SPACE to Start")
     running = False
     waiting = True
-    show_big_message("Press SPACE to Start")
 
 # -------------------------
 # Keyboard bindings
@@ -319,7 +313,6 @@ while True:
                 brick.hideturtle()
                 if random.random() < 0.2:
                     spawn_powerup(brick.xcor(), brick.ycor())
-                    print("Spawn power-up at", brick.xcor(), brick.ycor())
                 if abs(b.ycor() - brick.ycor()) > 10:
                     b.dy *= -1
                 else:
@@ -342,7 +335,7 @@ while True:
             powerups.remove(pu)
 
     # Win condition
-    if not bricks and running:
+    if not bricks and running and not just_restarted:
         level += 1
         reset_ball_positions()
         create_bricks(level)
@@ -350,4 +343,3 @@ while True:
         level_up()
         running = False
         waiting = True
-        show_message(f"Level {level}!\nPress SPACE to Start")
