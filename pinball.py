@@ -38,8 +38,8 @@ paddle_speed = 15
 # Balls
 # -------------------------
 balls = []
-ball_speed_base = 2
-max_ball_speed = 5
+ball_speed_base = 1.5
+max_ball_speed = 2
 
 def create_ball():
     b = turtle.Turtle()
@@ -396,6 +396,15 @@ def lose_life():
         return True
     return False
 
+def clamp_speed(ball):
+    speed = (ball.dx**2 + ball.dy**2) ** 0.5
+    if speed > max_ball_speed:
+        scale = max_ball_speed / speed
+        ball.dx *= scale
+        ball.dy *= scale
+
+
+
 # -------------------------
 # Keyboard bindings
 # -------------------------
@@ -465,6 +474,7 @@ while True:
             b.dx = (offset / paddle_half_width) * ball_speed_base
             paddle_dx = paddle.xcor() - paddle_last_x
             b.dx += paddle_dx * 0.2
+            clamp_speed(b)
             pygame.mixer.Sound.play(sound_bounce)
 
         # Brick collision (full version)
@@ -495,6 +505,8 @@ while True:
                     b.dy *= -1
                 else:
                     b.dx *= -1
+                    
+                clamp_speed(b)
 
                 pygame.mixer.Sound.play(sound_brick)
                 break
